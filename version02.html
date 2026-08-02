@@ -308,17 +308,6 @@ section{padding:96px 0;position:relative}
 .feebox em{font-style:normal;font-size:.92rem;color:#C7DDF3;max-width:34ch;display:block}
 
 .gform{margin:4px 0 6px}
-.embedwrap{margin:4px 0 6px}
-.framebox{position:relative;border-radius:22px;overflow:hidden;background:var(--night-2);
-  box-shadow:0 4px 12px rgba(0,0,0,.35),0 30px 60px -34px rgba(0,0,0,.85);
-  border:1px solid rgba(255,255,255,.12)}
-.framebox iframe{display:block;width:100%;height:1580px;border:0;background:transparent}
-.frameload{position:absolute;inset:0;display:grid;place-items:center;color:#9F9FC8;
-  font-family:Fredoka;font-size:.98rem;background:var(--night-2);z-index:2;transition:opacity .5s}
-.frameload.gone{opacity:0;pointer-events:none}
-.framefall{font-size:.88rem;color:#9F9FC8;text-align:center;margin:14px 0 0}
-.framefall a{color:var(--sun);font-family:Fredoka;font-weight:600;text-decoration:none}
-@media (max-width:640px){ .framebox iframe{height:1780px} }
 .gfnote{font-size:1rem;color:#C7C7E2;margin:0 0 18px}
 .gfnote b{font-family:Fredoka;font-weight:600;color:var(--sun)}
 .submitrow{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
@@ -636,18 +625,7 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;
 
       <div class="formerr" id="formerr"></div>
 
-      <!-- the registration form, embedded from Apps Script -->
-      <div class="embedwrap" id="embedwrap" style="display:none">
-        <p class="gfnote" id="embednote"></p>
-        <div class="framebox">
-          <div class="frameload" id="frameload">Loading the registration form…</div>
-          <iframe id="regframe" title="TechWiz 2026 registration form" loading="lazy"></iframe>
-        </div>
-        <p class="framefall">Form not loading?
-          <a id="framedirect" href="#" target="_blank" rel="noopener">Open it in a new tab</a>.</p>
-      </div>
-
-      <!-- link mode, and the fallback when no Apps Script URL is set -->
+      <!-- shown when CONFIG.endpoint is empty: send parents to their own Google Form -->
       <div class="gform" id="gform" style="display:none">
         <p class="gfnote" id="gfnote"></p>
         <a class="btn btn-primary" id="gflink" href="#" target="_blank" rel="noopener">
@@ -831,34 +809,26 @@ const CONFIG = {
   phone     : "0905 161 3606",
   phoneRaw  : "2349051613606",
 
-  /* ── YOUR APPS SCRIPT REGISTRATION PAGE ──────────────────────────
-     Paste the /exec URL here. In the Sheet:
-       TechWiz > Show registration page URL
-     Leave it empty and the page falls back to the Google Forms below. */
-  appUrl : "https://script.google.com/macros/s/AKfycbwfZdyY_3ZMi7PaxZTCkJkegJNOW-sfANjGEjQiBNE91_z5oBaQ/exec",
-
-  /* embed = true   the form appears inside this page, in a frame
-     embed = false  the button opens the form in a new tab           */
-  embed  : true,
-
-  // Fallback only — used when appUrl is empty.
+  // Each cohort has its OWN form. The button follows the Minna/Abuja toggle,
+  // so a Minna parent can never land on the ₦50,000 Abuja form.
   forms: {
     minna: "https://docs.google.com/forms/d/e/1FAIpQLSdK5JwSzRlR92FKna2UiPZzpGQPvLfiKDTvDBM8pcEXvN77LA/viewform",
     abuja: "https://docs.google.com/forms/d/e/1FAIpQLSdxuQvW_1sh24naZ6RrPHc2KSYxdWLXHoAE0_c2ilg6OPsLfA/viewform"
-  }
+  },
+
+  // Optional: the in-page form. Paste the Apps Script /exec URL to switch the
+  // page from "open the Google Form" to registering without leaving the page.
+  endpoint  : ""
 };
 
 /* ─── end of the bit you edit ─────────────────────────────────────── */
 
-/* Accept only a real Apps Script /exec URL. A wrong link (an /edit or /dev
-   URL, or a leftover placeholder) is treated as "not set", so the page falls
-   back to the Google Forms rather than sending parents somewhere broken.
-   ?appUrl=... in the address bar overrides it, for testing a new deployment. */
+/* Allow ?endpoint=... in the address bar for testing a new deployment. */
 (function(){
-  const q = new URLSearchParams(location.search).get('appUrl');
-  if (q) CONFIG.appUrl = q;
-  if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(String(CONFIG.appUrl || ''))) {
-    CONFIG.appUrl = '';
+  const q = new URLSearchParams(location.search).get('endpoint');
+  if (q && /^https:\/\/script\.google\.com\//.test(q)) CONFIG.endpoint = q;
+  if (!/^https:\/\/script\.google\.com\/.*\/exec$/.test(String(CONFIG.endpoint || ''))) {
+    CONFIG.endpoint = '';
   }
 })();
 
@@ -1185,77 +1155,22 @@ tick();
 /* ============================================================
    6 · REGISTRATION FORM
    ============================================================ */
-/* Points the registration UI at the cohort the parent is currently viewing.
-   Three modes, in priority order:
-     1. appUrl + embed   -> the Apps Script form inside this page
-     2. appUrl           -> a button opening the Apps Script form
-     3. no appUrl        -> a button opening that cohort's Google Form      */
+/* Keeps the registration button pointed at the right cohort's form. */
 function syncCohortForm(){
-  const on  = document.querySelector('.switch button.on');
+  const on = document.querySelector('.switch button.on');
   const key = on && on.dataset.c === 'abuja' ? 'abuja' : 'minna';
-
-  const note = key === 'abuja'
-    ? 'You are registering for the <b>Abuja</b> cohort &mdash; Merit Award House, Maitama, 10&ndash;13 August.'
-    : 'You are registering for the <b>Minna</b> cohort &mdash; AISHA Memorial School, 3&ndash;7 August.';
-
-  const embedwrap = document.getElementById('embedwrap');
-  const gform     = document.getElementById('gform');
-  const err       = document.getElementById('formerr');
-
-  /* ---- 1 & 2: the Apps Script page ---- */
-  if (CONFIG.appUrl){
-    const url = CONFIG.appUrl + '?cohort=' + key;
-
-    if (CONFIG.embed){
-      const frame  = document.getElementById('regframe');
-      const loader = document.getElementById('frameload');
-      gform.style.display = 'none';
-      embedwrap.style.display = '';
-      document.getElementById('embednote').innerHTML = note;
-      document.getElementById('framedirect').href = url;
-
-      // Only reload when the cohort actually changed, or switching tabs would
-      // wipe a half-filled form.
-      if (frame.dataset.cohort !== key){
-        frame.dataset.cohort = key;
-        loader.classList.remove('gone');
-        frame.src = url;
-        frame.onload = () => loader.classList.add('gone');
-        // If the frame is blocked (some browsers/extensions), stop pretending.
-        setTimeout(() => {
-          if (!loader.classList.contains('gone')){
-            loader.textContent = 'Still loading — use the link below if it does not appear.';
-          }
-        }, 8000);
-      }
-      err.classList.remove('on');
-      return;
-    }
-
-    embedwrap.style.display = 'none';
-    gform.style.display = '';
-    document.getElementById('gfnote').innerHTML = note;
-    const link = document.getElementById('gflink');
-    link.href = url;
-    link.style.pointerEvents = '';
-    link.style.opacity = '';
-    err.classList.remove('on');
-    return;
-  }
-
-  /* ---- 3: fall back to the cohort's Google Form ---- */
-  embedwrap.style.display = 'none';
-  gform.style.display = '';
-  const url  = (CONFIG.forms || {})[key];
+  const url = (CONFIG.forms || {})[key];
   const link = document.getElementById('gflink');
-  const gnote = document.getElementById('gfnote');
+  const note = document.getElementById('gfnote');
+  const err  = document.getElementById('formerr');
+  if (!link) return;
 
   if (!/^https:\/\/docs\.google\.com\/forms\//.test(String(url || ''))){
     link.removeAttribute('href');
     link.style.pointerEvents = 'none';
     link.style.opacity = '.5';
-    err.textContent = 'SETUP: no registration form for the ' + key +
-      ' cohort. Add CONFIG.appUrl, or a link in CONFIG.forms.';
+    err.textContent = 'SETUP: no registration form link for the ' + key +
+      ' cohort. Add it to CONFIG.forms at the top of the script.';
     err.classList.add('on');
     return;
   }
@@ -1264,7 +1179,9 @@ function syncCohortForm(){
   link.href = url;
   link.style.pointerEvents = '';
   link.style.opacity = '';
-  gnote.innerHTML = note;
+  note.innerHTML = key === 'abuja'
+    ? 'You are registering for the <b>Abuja</b> cohort &mdash; Merit Award House, Maitama, 10&ndash;13 August.'
+    : 'You are registering for the <b>Minna</b> cohort &mdash; AISHA Memorial School, 3&ndash;7 August.';
 }
 
 function bootForm(){
@@ -1274,12 +1191,16 @@ function bootForm(){
   const errBox = document.getElementById('formerr');
   if (!form || !btn) return;
 
-  /* Registration now lives in the Apps Script page, so the old in-page form
-     stays hidden. syncCohortForm() decides what the parent actually sees. */
-  form.style.display = 'none';
-  syncCohortForm();
-  document.querySelectorAll('.switch button').forEach(b =>
-    b.addEventListener('click', () => setTimeout(syncCohortForm, 0)));
+  /* No in-page endpoint yet? Then hide the built-in form and point parents at
+     the Google Form for the cohort they are currently looking at. */
+  const gform = document.getElementById('gform');
+  if (!CONFIG.endpoint){
+    form.style.display = 'none';
+    gform.style.display = '';
+    syncCohortForm();
+    document.querySelectorAll('.switch button').forEach(b =>
+      b.addEventListener('click', () => setTimeout(syncCohortForm, 0)));
+  }
 
   const started = Date.now();
   const $ = id => document.getElementById(id);
