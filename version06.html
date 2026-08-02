@@ -1267,49 +1267,6 @@ function syncCohortForm(){
   gnote.innerHTML = note;
 }
 
-/* The embedded form posts its state out (see Form.html). Without this the
-   line above the frame keeps announcing whichever cohort the page toggle was
-   left on, even after the parent picked the other one inside the form or
-   finished registering. */
-function bootFrameBridge(){
-  const note = document.getElementById('embednote');
-  if (!note) return;
-
-  addEventListener('message', function(e){
-    // Only trust messages from the Apps Script origin.
-    if (!/^https:\/\/[\w.-]*\.google\.com$/.test(e.origin)) return;
-    const m = e.data;
-    if (!m || m.techwiz !== true) return;
-
-    if (m.type === 'cohort'){
-      const abuja = /abuja/i.test(m.cohort || '');
-      note.innerHTML = abuja
-        ? 'You are registering for the <b>Abuja</b> cohort &mdash; Merit Award House, Maitama, 10&ndash;13 August.'
-        : 'You are registering for the <b>Minna</b> cohort &mdash; AISHA Memorial School, 3&ndash;7 August.';
-      // keep the page toggle in step, without reloading the frame
-      const btn = document.querySelector('.switch button[data-c=' + (abuja ? 'abuja' : 'minna') + ']');
-      const frame = document.getElementById('regframe');
-      if (btn && !btn.classList.contains('on')){
-        document.querySelectorAll('.switch button').forEach(b => {
-          b.classList.remove('on'); b.setAttribute('aria-selected','false');
-        });
-        btn.classList.add('on'); btn.setAttribute('aria-selected','true');
-        if (frame) frame.dataset.cohort = abuja ? 'abuja' : 'minna';  // stop a reload
-        render(abuja ? 'abuja' : 'minna');
-      }
-      return;
-    }
-
-    if (m.type === 'submitted'){
-      const waitlist = m.status === 'WAITLIST';
-      note.innerHTML = waitlist
-        ? '<b>Registered.</b> You are on the waiting list &mdash; we will contact you if a place opens.'
-        : '<b>Registered.</b> Your place is held. Payment details are shown below.';
-      try { if (note.scrollIntoView) note.scrollIntoView({behavior:'smooth', block:'center'}); } catch (e) {}
-    }
-  });
-}
-
 function bootForm(){
   const form   = document.getElementById('rform');
   const doneEl = document.getElementById('done');
@@ -1578,7 +1535,6 @@ function boot(){
     ['reveal',       bootReveal],
     ['hero text',    bootHeroText],
     ['registration form', bootForm],
-    ['frame bridge',      bootFrameBridge],
     ['failsafe',     bootFailsafe],
   ];
 
