@@ -1276,10 +1276,8 @@ function bootFrameBridge(){
   if (!note) return;
 
   addEventListener('message', function(e){
-    /* Apps Script serves the form's HTML from *.googleusercontent.com, NOT
-       script.google.com — the sandbox runs on a different host. Checking only
-       google.com silently dropped every message the form sent. */
-    if (!/^https:\/\/[\w.-]+\.(googleusercontent|google)\.com$/.test(e.origin)) return;
+    // Only trust messages from the Apps Script origin.
+    if (!/^https:\/\/[\w.-]*\.google\.com$/.test(e.origin)) return;
     const m = e.data;
     if (!m || m.techwiz !== true) return;
 
